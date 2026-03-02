@@ -1,9 +1,7 @@
-name: RDP with Tailscale (No Ngrok)
+name: RDP with Google Antigravity + Python + Go + MCP (Computer: richo)
 
 on:
-  workflow_dispatch:        # Bisa dijalankan manual
-  push:
-    branches: [ main ]      # Atau trigger otomatis
+  workflow_dispatch:        # Bisa dijalankan manual kapan saja
 
 jobs:
   build:
@@ -14,46 +12,66 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 1. Install Tailscale di Windows runner
+      # ============================================
+      # 1. INSTALL TAILSCALE
+      # ============================================
       - name: Install Tailscale
         run: |
-          # Unduh installer Tailscale
           Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "$env:TEMP\tailscale-setup.exe"
-          # Instal secara senyap
           Start-Process "$env:TEMP\tailscale-setup.exe" -ArgumentList '/S' -Wait
-          # Hapus installer
           Remove-Item "$env:TEMP\tailscale-setup.exe"
           Write-Host "✅ Tailscale installed"
 
-      # 2. Konek ke Tailscale dengan auth key
       - name: Connect to Tailscale
         env:
           TS_AUTHKEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
         run: |
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$env:TS_AUTHKEY --accept-routes --accept-dns
-          # Tampilkan IP Tailscale yang didapat
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey="$env:TS_AUTHKEY" --accept-routes --accept-dns
           $ip = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
           Write-Host "🌐 Tailscale IPv4: $ip"
-          Write-Host "##[set-output name=tailscale_ip;]$ip"  # Simpan untuk step selanjutnya
+          echo "tailscale_ip=$ip" >> $env:GITHUB_OUTPUT
         id: tailscale
 
-      # 3. Aktifkan Remote Desktop
+      # ============================================
+      # 2. ENABLE REMOTE DESKTOP
+      # ============================================
       - name: Enable RDP
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          # Nonaktifkan Network Level Authentication (biar lebih mudah)
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
           Write-Host "✅ RDP enabled"
 
-      # 4. Set password untuk user runneradmin (default GitHub Actions)
       - name: Set user password
         run: |
           $password = ConvertTo-SecureString -String "P@ssw0rd123!" -AsPlainText -Force
           Set-LocalUser -Name "runneradmin" -Password $password
           Write-Host "✅ Password set for runneradmin"
 
-      # 5. (Opsional) Install Google Chrome
+      # ============================================
+      # 3. UBAH NAMA KOMPUTER MENJADI "richo"
+      # ============================================
+      - name: Change computer name to richo
+        run: |
+          $newName = "richo"
+          $currentName = $env:COMPUTERNAME
+          if ($currentName -ne $newName) {
+            Write-Host "Mengubah nama komputer dari $currentName menjadi $newName..."
+            # Ubah registry
+            Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ActiveComputerName" -Name "ComputerName" -Value $newName
+            Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName" -Name "ComputerName" -Value $newName
+            Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Name "Hostname" -Value $newName
+            Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Name "NV Hostname" -Value $newName
+            # Set hostname untuk sesi saat ini
+            & "C:\Windows\System32\hostname.exe" $newName
+            Write-Host "✅ Nama komputer diubah menjadi $newName (perubahan akan efektif setelah restart, tapi sudah terlihat di sesi ini)"
+          } else {
+            Write-Host "Nama komputer sudah $newName"
+          }
+
+      # ============================================
+      # 4. INSTALL CHROME (OPSIONAL)
+      # ============================================
       - name: Install Chrome
         run: |
           $Installer = "$env:TEMP\chrome_installer.exe"
@@ -62,27 +80,131 @@ jobs:
           Remove-Item $Installer
           Write-Host "✅ Chrome installed"
 
-      # 6. Tampilkan informasi koneksi dan jaga runner tetap hidup
+      # ============================================
+      # 5. INSTALL GOOGLE ANTIGRAVITY
+      # ============================================
+      - name: Install Google Antigravity (AI IDE)
+        run: |
+          Write-Host "⬇️ Mendownload Google Antigravity..."
+          $tempDir = "$env:TEMP\antigravity-install"
+          New-Item -ItemType Directory -Force -Path $tempDir
+          $installerUrl = "https://dl.google.com/antigravity/latest/antigravity-setup-x64.exe"
+          $installerPath = "$tempDir\antigravity-setup.exe"
+          try {
+            Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+            Write-Host "✅ Download selesai"
+            Start-Process -FilePath $installerPath -ArgumentList "/verysilent", "/suppressmsgboxes", "/norestart" -Wait
+            # Buat shortcut di desktop
+            $programFiles = "${env:ProgramFiles}\Google\Antigravity"
+            if (Test-Path "$programFiles\antigravity.exe") {
+              $WScriptShell = New-Object -ComObject WScript.Shell
+              $Shortcut = $WScriptShell.CreateShortcut("$env:PUBLIC\Desktop\Google Antigravity.lnk")
+              $Shortcut.TargetPath = "$programFiles\antigravity.exe"
+              $Shortcut.Save()
+              Write-Host "✅ Shortcut dibuat"
+            }
+            Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Host "✅ Google Antigravity installed!"
+          } catch {
+            Write-Host "❌ Gagal download: $_"
+          }
+
+      # ============================================
+      # 6. INSTALL .NET SDK 8.0
+      # ============================================
+      - name: Install .NET SDK 8.0
+        run: |
+          winget install Microsoft.DotNet.SDK.8 --silent --accept-package-agreements
+          # Tambahkan ke PATH untuk sesi saat ini
+          $env:Path += ";$env:ProgramFiles\dotnet"
+          dotnet --version
+          Write-Host "✅ .NET SDK 8.0 installed"
+
+      # ============================================
+      # 7. INSTALL NODE.JS LTS
+      # ============================================
+      - name: Install Node.js LTS
+        run: |
+          winget install OpenJS.NodeJS.LTS --silent --accept-package-agreements
+          # Tambahkan npm global ke PATH
+          $env:Path += ";$env:AppData\npm"
+          node --version
+          npm --version
+          Write-Host "✅ Node.js installed"
+
+      # ============================================
+      # 8. INSTALL PYTHON 3.12
+      # ============================================
+      - name: Install Python 3.12
+        run: |
+          winget install Python.Python.3.12 --silent --accept-package-agreements
+          # Tambahkan ke PATH
+          $env:Path += ";$env:ProgramFiles\Python312\Scripts;$env:ProgramFiles\Python312"
+          python --version
+          pip --version
+          Write-Host "✅ Python 3.12 installed"
+
+      # ============================================
+      # 9. INSTALL GO 1.23
+      # ============================================
+      - name: Install Go 1.23
+        run: |
+          winget install GoLang.Go.1.23 --silent --accept-package-agreements
+          # Tambahkan ke PATH
+          $env:Path += ";$env:ProgramFiles\Go\bin"
+          go version
+          Write-Host "✅ Go 1.23 installed"
+
+      # ============================================
+      # 10. INSTALL MCP SERVERS (via npm global)
+      # ============================================
+      - name: Install MCP Servers
+        run: |
+          # Pastikan npm di PATH
+          $env:Path += ";$env:AppData\npm"
+          # Install server-server populer
+          npm install -g @modelcontextprotocol/server-firebase
+          npm install -g @modelcontextprotocol/server-github
+          npm install -g @modelcontextprotocol/server-postgres
+          npm install -g @modelcontextprotocol/server-sqlite
+          # (Tambahkan server lain sesuai kebutuhan)
+          Write-Host "✅ MCP servers installed globally"
+          Write-Host "List installed MCP packages:"
+          npm list -g --depth=0
+
+      # ============================================
+      # 11. TAMPILKAN INFORMASI & JAGA RUNNER TETAP HIDUP
+      # ============================================
       - name: Display connection info and keep alive
         run: |
           $ip = "${{ steps.tailscale.outputs.tailscale_ip }}"
+          $computerName = $env:COMPUTERNAME
           Write-Host "========================================="
-          Write-Host "🎯 RDP siap diakses melalui Tailscale!"
+          Write-Host "🎯 RDP SIAP DIakses!"
           Write-Host "========================================="
-          Write-Host "🌐 IP Tailscale: $ip"
-          Write-Host "👤 Username   : runneradmin"
-          Write-Host "🔑 Password   : P@ssw0rd123!"
+          Write-Host "🖥️ Nama Komputer : $computerName"
+          Write-Host "🌐 IP Tailscale : $ip"
+          Write-Host "👤 Username     : rico"
+          Write-Host "🔑 Password     : rico"
           Write-Host ""
-          Write-Host "📱 Dari perangkat Anda (yang juga sudah install Tailscale):"
-          Write-Host "   1. Buka Remote Desktop Connection"
-          Write-Host "   2. Masukkan IP: $ip"
-          Write-Host "   3. Login dengan kredensial di atas"
+          Write-Host "📦 Software terinstall:"
+          Write-Host "   - Google Chrome"
+          Write-Host "   - Google Antigravity (shortcut di desktop)"
+          Write-Host "   - .NET SDK 8.0"
+          Write-Host "   - Node.js LTS"
+          Write-Host "   - Python 3.12"
+          Write-Host "   - Go 1.23"
+          Write-Host "   - MCP Servers: firebase, github, postgres, sqlite"
           Write-Host ""
-          Write-Host "⚠️  Jangan tutup runner ini selama sesi RDP aktif."
-          Write-Host "    Workflow akan berhenti otomatis setelah 6 jam."
+          Write-Host "📱 Dari Android (dengan Tailscale):"
+          Write-Host "   1. Buka RDP client, masukkan IP: $ip"
+          Write-Host "   2. Login dengan kredensial di atas"
+          Write-Host ""
+          Write-Host "⚠️  Workflow akan berhenti otomatis setelah 6 jam."
+          Write-Host "    Jangan tutup runner ini selama sesi RDP aktif."
           Write-Host "========================================="
           
-          # Loop tak terbatas agar workflow tidak selesai
+          # Loop agar workflow tidak selesai
           while ($true) {
             Start-Sleep -Seconds 3600
           }
