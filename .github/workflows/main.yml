@@ -1,4 +1,4 @@
-name: RDP with Google Antigravity + Python + Go + MCP (Computer: richo)
+name: RDP with Google Antigravity + Python + Go + MCP 
 
 on:
   workflow_dispatch:        # Bisa dijalankan manual kapan saja
