@@ -1,55 +1,88 @@
-name: Windows RDP with Cloudflare (TryCloudflare)
+name: RDP with Tailscale (No Ngrok)
 
 on:
-  workflow_dispatch: # Trigger manual
+  workflow_dispatch:        # Bisa dijalankan manual
+  push:
+    branches: [ main ]      # Atau trigger otomatis
 
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 360 # Maksimal 6 jam
+    timeout-minutes: 360    # Maksimal 6 jam
 
     steps:
-    - name: Download cloudflared
-      run: |
-        # Download cloudflared dari GitHub release
-        Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "$env:TEMP\cloudflared.exe"
-        Write-Host "✅ cloudflared downloaded"
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Enable Remote Desktop
-      run: |
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
-        Write-Host "✅ RDP Enabled"
+      # 1. Install Tailscale di Windows runner
+      - name: Install Tailscale
+        run: |
+          # Unduh installer Tailscale
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "$env:TEMP\tailscale-setup.exe"
+          # Instal secara senyap
+          Start-Process "$env:TEMP\tailscale-setup.exe" -ArgumentList '/S' -Wait
+          # Hapus installer
+          Remove-Item "$env:TEMP\tailscale-setup.exe"
+          Write-Host "✅ Tailscale installed"
 
-    - name: Set User Password
-      run: |
-        # Ganti "P@ssw0rd123!" dengan password pilihan Anda
-        $password = ConvertTo-SecureString -String "P@ssw0rd123!" -AsPlainText -Force
-        Set-LocalUser -Name "runneradmin" -Password $password
-        Write-Host "✅ Password set for runneradmin"
+      # 2. Konek ke Tailscale dengan auth key
+      - name: Connect to Tailscale
+        env:
+          TS_AUTHKEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
+        run: |
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$env:TS_AUTHKEY --accept-routes --accept-dns
+          # Tampilkan IP Tailscale yang didapat
+          $ip = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
+          Write-Host "🌐 Tailscale IPv4: $ip"
+          Write-Host "##[set-output name=tailscale_ip;]$ip"  # Simpan untuk step selanjutnya
+        id: tailscale
 
-    - name: Install Chrome (Opsional)
-      run: |
-        $Installer = "$env:TEMP\chrome_installer.exe"
-        Invoke-WebRequest "http://dl.google.com/chrome/install/375.126/chrome_installer.exe" -OutFile $Installer
-        Start-Process $Installer -ArgumentList "/silent", "/install" -Wait
-        Remove-Item $Installer
-        Write-Host "✅ Chrome installed"
+      # 3. Aktifkan Remote Desktop
+      - name: Enable RDP
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          # Nonaktifkan Network Level Authentication (biar lebih mudah)
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
+          Write-Host "✅ RDP enabled"
 
-    - name: Create Cloudflare Tunnel
-      run: |
-        Write-Host "========================================="
-        Write-Host "🔗 MEMULAI TUNNEL CLOUDFLARE"
-        Write-Host "========================================="
-        Write-Host ""
-        Write-Host "Cari baris yang mengandung: 'Infobox' URL untuk RDP Anda"
-        Write-Host "Contoh: https://contoh-acak.trycloudflare.com"
-        Write-Host ""
-        Write-Host "KREDENSIAL RDP:"
-        Write-Host "   Username: runneradmin"
-        Write-Host "   Password: P@ssw0rd123!"
-        Write-Host "========================================="
-        
-        # Jalankan tunnel ke port RDP (3389)
-        & "$env:TEMP\cloudflared.exe" tunnel --url tcp://localhost:3389
+      # 4. Set password untuk user runneradmin (default GitHub Actions)
+      - name: Set user password
+        run: |
+          $password = ConvertTo-SecureString -String "P@ssw0rd123!" -AsPlainText -Force
+          Set-LocalUser -Name "runneradmin" -Password $password
+          Write-Host "✅ Password set for runneradmin"
+
+      # 5. (Opsional) Install Google Chrome
+      - name: Install Chrome
+        run: |
+          $Installer = "$env:TEMP\chrome_installer.exe"
+          Invoke-WebRequest "http://dl.google.com/chrome/install/375.126/chrome_installer.exe" -OutFile $Installer
+          Start-Process $Installer -ArgumentList "/silent", "/install" -Wait
+          Remove-Item $Installer
+          Write-Host "✅ Chrome installed"
+
+      # 6. Tampilkan informasi koneksi dan jaga runner tetap hidup
+      - name: Display connection info and keep alive
+        run: |
+          $ip = "${{ steps.tailscale.outputs.tailscale_ip }}"
+          Write-Host "========================================="
+          Write-Host "🎯 RDP siap diakses melalui Tailscale!"
+          Write-Host "========================================="
+          Write-Host "🌐 IP Tailscale: $ip"
+          Write-Host "👤 Username   : runneradmin"
+          Write-Host "🔑 Password   : P@ssw0rd123!"
+          Write-Host ""
+          Write-Host "📱 Dari perangkat Anda (yang juga sudah install Tailscale):"
+          Write-Host "   1. Buka Remote Desktop Connection"
+          Write-Host "   2. Masukkan IP: $ip"
+          Write-Host "   3. Login dengan kredensial di atas"
+          Write-Host ""
+          Write-Host "⚠️  Jangan tutup runner ini selama sesi RDP aktif."
+          Write-Host "    Workflow akan berhenti otomatis setelah 6 jam."
+          Write-Host "========================================="
+          
+          # Loop tak terbatas agar workflow tidak selesai
+          while ($true) {
+            Start-Sleep -Seconds 3600
+          }
