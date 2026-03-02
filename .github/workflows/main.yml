@@ -1,0 +1,55 @@
+name: Windows RDP with Cloudflare (TryCloudflare)
+
+on:
+  workflow_dispatch: # Trigger manual
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 360 # Maksimal 6 jam
+
+    steps:
+    - name: Download cloudflared
+      run: |
+        # Download cloudflared dari GitHub release
+        Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "$env:TEMP\cloudflared.exe"
+        Write-Host "✅ cloudflared downloaded"
+
+    - name: Enable Remote Desktop
+      run: |
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
+        Write-Host "✅ RDP Enabled"
+
+    - name: Set User Password
+      run: |
+        # Ganti "P@ssw0rd123!" dengan password pilihan Anda
+        $password = ConvertTo-SecureString -String "P@ssw0rd123!" -AsPlainText -Force
+        Set-LocalUser -Name "runneradmin" -Password $password
+        Write-Host "✅ Password set for runneradmin"
+
+    - name: Install Chrome (Opsional)
+      run: |
+        $Installer = "$env:TEMP\chrome_installer.exe"
+        Invoke-WebRequest "http://dl.google.com/chrome/install/375.126/chrome_installer.exe" -OutFile $Installer
+        Start-Process $Installer -ArgumentList "/silent", "/install" -Wait
+        Remove-Item $Installer
+        Write-Host "✅ Chrome installed"
+
+    - name: Create Cloudflare Tunnel
+      run: |
+        Write-Host "========================================="
+        Write-Host "🔗 MEMULAI TUNNEL CLOUDFLARE"
+        Write-Host "========================================="
+        Write-Host ""
+        Write-Host "Cari baris yang mengandung: 'Infobox' URL untuk RDP Anda"
+        Write-Host "Contoh: https://contoh-acak.trycloudflare.com"
+        Write-Host ""
+        Write-Host "KREDENSIAL RDP:"
+        Write-Host "   Username: runneradmin"
+        Write-Host "   Password: P@ssw0rd123!"
+        Write-Host "========================================="
+        
+        # Jalankan tunnel ke port RDP (3389)
+        & "$env:TEMP\cloudflared.exe" tunnel --url tcp://localhost:3389
