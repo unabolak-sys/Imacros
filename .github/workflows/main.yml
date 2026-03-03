@@ -12,7 +12,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 1. Install Tailscale (Wajib)
+      # 1. Install Tailscale
       - name: Install Tailscale
         run: |
           Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "$env:TEMP\tailscale-setup.exe"
@@ -40,7 +40,7 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
           
-          # B. Matikan Firewall (Supaya gak ribet koneksi)
+          # B. Matikan Firewall
           Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
           
           # C. Set Password
@@ -51,20 +51,24 @@ jobs:
           $newName = "richo"
           $env:COMPUTERNAME = $newName
           [Environment]::SetEnvironmentVariable("COMPUTERNAME", $newName, "User")
-          $sysPath = "HKLM:\SYSTEM\CurrentControlSet"
-          Set-ItemProperty -Path "$sysPath\Control\ComputerName\ActiveComputerName" -Name "ComputerName" -Value $newName -ErrorAction SilentlyContinue
           
-          Write-Host "✅ System Configured (RDP ON, Firewall OFF, Name: richo)"
+          Write-Host "✅ System Configured (Name: richo)"
 
-      # 4. Install .NET SDK (Satu-satunya request)
-      - name: Install .NET SDK 8
+      # 4. Ganti Install .NET dengan Shortcut Virtual Keyboard
+      - name: Setup Virtual Keyboard Shortcut
         run: |
-          Write-Host "⬇️ Installing .NET SDK 8..."
-          # Windows Runner biasanya sudah ada .NET, tapi kita pastikan install/update
-          winget install Microsoft.DotNet.SDK.8 --silent --accept-package-agreements
+          Write-Host "⌨️ Creating Virtual Keyboard Shortcut..."
+          $SourceFileLocation = "$env:SystemRoot\System32\osk.exe"
+          $ShortcutLocation = "$env:USERPROFILE\Desktop\Virtual Keyboard.lnk"
+          $WScriptShell = New-Object -ComObject WScript.Shell
+          $Shortcut = $WScriptShell.CreateShortcut($ShortcutLocation)
+          $Shortcut.TargetPath = $SourceFileLocation
+          $Shortcut.Save()
           
-          Write-Host "✅ .NET Installed. Version check:"
-          dotnet --version
+          # Pin ke Taskbar (via Registry/Command seringkali butuh restart, 
+          # jadi kita taruh di Public Desktop agar langsung kelihatan)
+          Copy-Item $ShortcutLocation -Destination "C:\Users\Public\Desktop\Virtual Keyboard.lnk" -Force
+          Write-Host "✅ Virtual Keyboard ready on Desktop"
 
       # 5. Ready & Keep Alive
       - name: RDP Ready
@@ -78,6 +82,6 @@ jobs:
           Write-Host "👤 Username      : runneradmin"
           Write-Host "🔑 Password      : P@ssw0rd123!"
           Write-Host ""
-          Write-Host "📦 Tools: Hanya .NET SDK"
+          Write-Host "⌨️ Feature: Virtual Keyboard Shortcut Created"
           Write-Host "========================================="
           while ($true) { Start-Sleep -Seconds 60 }
