@@ -1,19 +1,18 @@
-name: RDP with Google Antigravity + Python + Go + MCP (Computer richo)
+name: RDP RE Tools (Firewall OFF + Localhost FIX)
 
 on:
-  workflow_dispatch:   # Bisa dijalankan manual kapan saja
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 360   # Maksimal 6 jam
+    timeout-minutes: 360
 
     steps:
-      # 1. Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Install Tailscale
+      # 1. Install Tailscale
       - name: Install Tailscale
         run: |
           Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "$env:TEMP\tailscale-setup.exe"
@@ -21,7 +20,7 @@ jobs:
           Remove-Item "$env:TEMP\tailscale-setup.exe"
           Write-Host "✅ Tailscale installed"
 
-      # 3. Connect ke Tailscale (Wajib ada Secret TAILSCALE_AUTH_KEY)
+      # 2. Connect Tailscale
       - name: Connect to Tailscale
         env:
           TS_AUTHKEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
@@ -32,153 +31,79 @@ jobs:
           echo "tailscale_ip=$ip" >> $env:GITHUB_OUTPUT
         id: tailscale
 
-      # 4. Enable Remote Desktop
-      - name: Enable RDP
+      # 3. Enable RDP & MATIKAN FIREWALL (Fix Localhost Issue)
+      - name: Enable RDP & Disable Firewall
         run: |
+          # Enable RDP
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
-          Write-Host "✅ RDP enabled"
+          
+          # 🔥 FIX: Matikan Firewall agar port 3000, 8000, dll bisa diakses
+          Write-Host "🔥 Mematikan Windows Firewall..."
+          Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
+          
+          Write-Host "✅ RDP enabled & Firewall OFF"
 
-      # 5. Set password untuk user runneradmin
+      # 4. Set Password
       - name: Set user password
         run: |
           $password = ConvertTo-SecureString -String "P@ssw0rd123!" -AsPlainText -Force
           Set-LocalUser -Name "runneradmin" -Password $password
-          Write-Host "✅ Password set for runneradmin"
 
-      # 6. Ubah nama komputer menjadi richo (Fixed Version)
+      # 5. Change Name to richo
       - name: Change computer name to richo
         run: |
           $newName = "richo"
-          Write-Host "Mengubah identitas komputer menjadi: $newName"
-          
-          # 1. Ubah Environment Variable (Agar aplikasi di sesi ini membaca nama baru)
           $env:COMPUTERNAME = $newName
           [Environment]::SetEnvironmentVariable("COMPUTERNAME", $newName, "User")
           [Environment]::SetEnvironmentVariable("COMPUTERNAME", $newName, "Machine")
-          
-          # 2. Update Registry (Visual only, karena tidak bisa restart)
           $sysPath = "HKLM:\SYSTEM\CurrentControlSet"
           Set-ItemProperty -Path "$sysPath\Control\ComputerName\ActiveComputerName" -Name "ComputerName" -Value $newName -ErrorAction SilentlyContinue
           Set-ItemProperty -Path "$sysPath\Control\ComputerName\ComputerName" -Name "ComputerName" -Value $newName -ErrorAction SilentlyContinue
           Set-ItemProperty -Path "$sysPath\Services\Tcpip\Parameters" -Name "Hostname" -Value $newName -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path "$sysPath\Services\Tcpip\Parameters" -Name "NV Hostname" -Value $newName -ErrorAction SilentlyContinue
-          
-          Write-Host "✅ Nama komputer diset ke $newName (Simulasi Session & Registry)"
 
-      # 7. Install Google Chrome
-      - name: Install Chrome
+      # 6. Install Tools (Chrome, VS Code, Ghidra, IDA)
+      - name: Install Tools
         run: |
+          # Chrome
           $Installer = "$env:TEMP\chrome_installer.exe"
           Invoke-WebRequest "http://dl.google.com/chrome/install/375.126/chrome_installer.exe" -OutFile $Installer
           Start-Process $Installer -ArgumentList "/silent", "/install" -Wait
           Remove-Item $Installer
-          Write-Host "✅ Chrome installed"
-
-      # 8. Install Google Antigravity (AI IDE)
-      - name: Install Google Antigravity
-        run: |
-          Write-Host "⬇️ Mendownload Google Antigravity..."
-          $tempDir = "$env:TEMP\antigravity-install"
-          New-Item -ItemType Directory -Force -Path $tempDir
-          $installerUrl = "https://dl.google.com/antigravity/latest/antigravity-setup-x64.exe"
-          $installerPath = "$tempDir\antigravity-setup.exe"
-          try {
-            Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
-            Write-Host "✅ Download selesai"
-            Start-Process -FilePath $installerPath -ArgumentList "/verysilent", "/suppressmsgboxes", "/norestart" -Wait
-            # Buat shortcut di desktop
-            $programFiles = "${env:ProgramFiles}\Google\Antigravity"
-            if (Test-Path "$programFiles\antigravity.exe") {
-              $WScriptShell = New-Object -ComObject WScript.Shell
-              $Shortcut = $WScriptShell.CreateShortcut("$env:PUBLIC\Desktop\Google Antigravity.lnk")
-              $Shortcut.TargetPath = "$programFiles\antigravity.exe"
-              $Shortcut.Save()
-              Write-Host "✅ Shortcut dibuat"
-            }
-            Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
-            Write-Host "✅ Google Antigravity installed!"
-          } catch {
-            Write-Host "❌ Gagal download: $_"
-          }
-
-      # 9. Install .NET SDK 8.0
-      - name: Install .NET SDK 8.0
-        run: |
-          winget install Microsoft.DotNet.SDK.8 --silent --accept-package-agreements
-          $env:Path += ";$env:ProgramFiles\dotnet"
-          dotnet --version
-          Write-Host "✅ .NET SDK 8.0 installed"
-
-      # 10. Install Node.js LTS
-      - name: Install Node.js LTS
-        run: |
-          winget install OpenJS.NodeJS.LTS --silent --accept-package-agreements
-          $env:Path += ";$env:AppData\npm"
-          node --version
-          npm --version
-          Write-Host "✅ Node.js installed"
-
-      # 11. Install Python 3.12
-      - name: Install Python 3.12
-        run: |
+          
+          # JDK 21 (For Ghidra)
+          winget install Microsoft.OpenJDK.21 --silent --accept-package-agreements --accept-source-agreements
+          
+          # Ghidra
+          winget install NSA.Ghidra --silent --accept-package-agreements --accept-source-agreements
+          
+          # IDA Free
+          winget install Hex-Rays.IDA.Free --silent --accept-package-agreements --accept-source-agreements
+          
+          # VS Code
+          winget install Microsoft.VisualStudioCode --silent --accept-package-agreements --accept-source-agreements
+          
+          # Python & Go
           winget install Python.Python.3.12 --silent --accept-package-agreements
-          $env:Path += ";$env:ProgramFiles\Python312\Scripts;$env:ProgramFiles\Python312"
-          python --version
-          pip --version
-          Write-Host "✅ Python 3.12 installed"
-
-      # 12. Install Go 1.23
-      - name: Install Go 1.23
-        run: |
           winget install GoLang.Go.1.23 --silent --accept-package-agreements
-          $env:Path += ";$env:ProgramFiles\Go\bin"
-          go version
-          Write-Host "✅ Go 1.23 installed"
+          
+          Write-Host "✅ Semua Tools Terinstall!"
 
-      # 13. Install MCP Servers via npm global
-      - name: Install MCP Servers
-        run: |
-          $env:Path += ";$env:AppData\npm"
-          npm install -g @modelcontextprotocol/server-firebase
-          npm install -g @modelcontextprotocol/server-github
-          npm install -g @modelcontextprotocol/server-postgres
-          npm install -g @modelcontextprotocol/server-sqlite
-          Write-Host "✅ MCP servers installed globally"
-          npm list -g --depth=0
-
-      # 14. Tampilkan info koneksi dan jaga runner tetap hidup
-      - name: Display connection info and keep alive
+      # 7. Info & Keep Alive
+      - name: Display connection info
         run: |
           $ip = "${{ steps.tailscale.outputs.tailscale_ip }}"
-          $computerName = $env:COMPUTERNAME
           Write-Host "========================================="
-          Write-Host "🎯 RDP SIAP DIakses!"
+          Write-Host "🎯 RDP SIAP - FIREWALL SUDAH MATI"
           Write-Host "========================================="
-          Write-Host "🖥️ Nama Komputer (Session) : $computerName"
+          Write-Host "🖥️ Nama Komputer (Session) : richo"
           Write-Host "🌐 IP Tailscale            : $ip"
           Write-Host "👤 Username                : runneradmin"
           Write-Host "🔑 Password                : P@ssw0rd123!"
           Write-Host ""
-          Write-Host "📦 Software terinstall:"
-          Write-Host "   - Google Chrome"
-          Write-Host "   - Google Antigravity (shortcut di desktop)"
-          Write-Host "   - .NET SDK 8.0"
-          Write-Host "   - Node.js LTS"
-          Write-Host "   - Python 3.12"
-          Write-Host "   - Go 1.23"
-          Write-Host "   - MCP Servers: firebase, github, postgres, sqlite"
-          Write-Host ""
-          Write-Host "📱 Dari Android (dengan Tailscale):"
-          Write-Host "   1. Buka RDP client, masukkan IP: $ip"
-          Write-Host "   2. Login dengan kredensial di atas"
-          Write-Host ""
-          Write-Host "⚠️  Workflow akan berhenti otomatis setelah 6 jam."
-          Write-Host "    Jangan tutup tab GitHub Actions ini selama sesi RDP aktif."
+          Write-Host "💡 TIPS AKSES LOCALHOST:"
+          Write-Host "   1. Jika akses dari HP/Laptop luar: Gunakan http://$ip:PORT"
+          Write-Host "   2. Jika akses dari Chrome RDP: Gunakan http://localhost:PORT"
+          Write-Host "   3. Pastikan aplikasi run dengan host '0.0.0.0' (jangan 127.0.0.1)"
           Write-Host "========================================="
-          
-          # Loop tak terbatas agar workflow tidak selesai
-          while ($true) {
-            Start-Sleep -Seconds 60
-          }
+          while ($true) { Start-Sleep -Seconds 60 }
