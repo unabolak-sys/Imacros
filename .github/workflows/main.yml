@@ -54,6 +54,19 @@ jobs:
           
           Write-Host "✅ System Configured (Name: richo)"
 
+           # === AKTIFKAN DARK MODE ===
+          Write-Host "🌑 Mengaktifkan Dark Mode..."
+          $regPath = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+          # Buat key jika belum ada (biasanya sudah ada, tapi untuk jaga-jaga)
+          if (!(Test-Path $regPath)) { New-Item -Path $regPath -Force | Out-Null }
+          
+          # Set Apps Use Dark Mode (File Explorer, Settings, dll)
+          Set-ItemProperty -Path $regPath -Name "AppsUseLightTheme" -Value 0 -Type Dword -Force
+          # Set System Use Dark Mode (Taskbar, Start Menu, dll)
+          Set-ItemProperty -Path $regPath -Name "SystemUsesLightTheme" -Value 0 -Type Dword -Force
+          
+          Write-Host "✅ System Configured (Name: richo, Dark Mode: ON)"
+
       # 4. Ganti Install .NET dengan Shortcut Virtual Keyboard
       - name: Setup Virtual Keyboard Shortcut
         run: |
