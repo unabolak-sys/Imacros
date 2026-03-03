@@ -9,7 +9,7 @@ jobs:
     timeout-minutes: 360   # Maksimal 6 jam
 
     steps:
-      # 1. Checkout repository (opsional, untuk mengakses file jika ada)
+      # 1. Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -21,7 +21,7 @@ jobs:
           Remove-Item "$env:TEMP\tailscale-setup.exe"
           Write-Host "✅ Tailscale installed"
 
-      # 3. Connect ke Tailscale (menggunakan secret)
+      # 3. Connect ke Tailscale (Wajib ada Secret TAILSCALE_AUTH_KEY)
       - name: Connect to Tailscale
         env:
           TS_AUTHKEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
@@ -47,23 +47,27 @@ jobs:
           Set-LocalUser -Name "runneradmin" -Password $password
           Write-Host "✅ Password set for runneradmin"
 
-      # 6. Ubah nama komputer menjadi richo (registry only, tanpa hostname command)
+      # 6. Ubah nama komputer menjadi richo (Fixed Version)
       - name: Change computer name to richo
         run: |
           $newName = "richo"
-          $currentName = $env:COMPUTERNAME
-          if ($currentName -ne $newName) {
-            Write-Host "Mengubah registry nama komputer dari $currentName menjadi $newName..."
-            Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ActiveComputerName" -Name "ComputerName" -Value $newName
-            Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName" -Name "ComputerName" -Value $newName
-            Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Name "Hostname" -Value $newName
-            Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Name "NV Hostname" -Value $newName
-            Write-Host "✅ Registry diubah. Nama komputer akan menjadi $newName setelah restart (tidak dilakukan, tapi sudah tersimpan)."
-          } else {
-            Write-Host "Nama komputer sudah $newName"
-          }
+          Write-Host "Mengubah identitas komputer menjadi: $newName"
+          
+          # 1. Ubah Environment Variable (Agar aplikasi di sesi ini membaca nama baru)
+          $env:COMPUTERNAME = $newName
+          [Environment]::SetEnvironmentVariable("COMPUTERNAME", $newName, "User")
+          [Environment]::SetEnvironmentVariable("COMPUTERNAME", $newName, "Machine")
+          
+          # 2. Update Registry (Visual only, karena tidak bisa restart)
+          $sysPath = "HKLM:\SYSTEM\CurrentControlSet"
+          Set-ItemProperty -Path "$sysPath\Control\ComputerName\ActiveComputerName" -Name "ComputerName" -Value $newName -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path "$sysPath\Control\ComputerName\ComputerName" -Name "ComputerName" -Value $newName -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path "$sysPath\Services\Tcpip\Parameters" -Name "Hostname" -Value $newName -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path "$sysPath\Services\Tcpip\Parameters" -Name "NV Hostname" -Value $newName -ErrorAction SilentlyContinue
+          
+          Write-Host "✅ Nama komputer diset ke $newName (Simulasi Session & Registry)"
 
-      # 7. Install Google Chrome (opsional)
+      # 7. Install Google Chrome
       - name: Install Chrome
         run: |
           $Installer = "$env:TEMP\chrome_installer.exe"
@@ -152,7 +156,7 @@ jobs:
           Write-Host "========================================="
           Write-Host "🎯 RDP SIAP DIakses!"
           Write-Host "========================================="
-          Write-Host "🖥️ Nama Komputer (saat ini) : $computerName"
+          Write-Host "🖥️ Nama Komputer (Session) : $computerName"
           Write-Host "🌐 IP Tailscale            : $ip"
           Write-Host "👤 Username                : runneradmin"
           Write-Host "🔑 Password                : P@ssw0rd123!"
@@ -171,10 +175,10 @@ jobs:
           Write-Host "   2. Login dengan kredensial di atas"
           Write-Host ""
           Write-Host "⚠️  Workflow akan berhenti otomatis setelah 6 jam."
-          Write-Host "    Jangan tutup runner ini selama sesi RDP aktif."
+          Write-Host "    Jangan tutup tab GitHub Actions ini selama sesi RDP aktif."
           Write-Host "========================================="
           
           # Loop tak terbatas agar workflow tidak selesai
           while ($true) {
-            Start-Sleep -Seconds 3600
+            Start-Sleep -Seconds 60
           }
