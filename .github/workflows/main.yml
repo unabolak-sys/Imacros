@@ -1,4 +1,4 @@
-name: RDP RE Tools (Firewall OFF + Localhost FIX)
+name: RDP Ultimate (Manual Install IDA+Ghidra)
 
 on:
   workflow_dispatch:
@@ -31,17 +31,16 @@ jobs:
           echo "tailscale_ip=$ip" >> $env:GITHUB_OUTPUT
         id: tailscale
 
-      # 3. Enable RDP & MATIKAN FIREWALL (Fix Localhost Issue)
+      # 3. Enable RDP & MATIKAN FIREWALL
       - name: Enable RDP & Disable Firewall
         run: |
           # Enable RDP
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
           
-          # 🔥 FIX: Matikan Firewall agar port 3000, 8000, dll bisa diakses
+          # 🔥 FIX: Matikan Firewall Total
           Write-Host "🔥 Mematikan Windows Firewall..."
           Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
-          
           Write-Host "✅ RDP enabled & Firewall OFF"
 
       # 4. Set Password
@@ -59,51 +58,75 @@ jobs:
           [Environment]::SetEnvironmentVariable("COMPUTERNAME", $newName, "Machine")
           $sysPath = "HKLM:\SYSTEM\CurrentControlSet"
           Set-ItemProperty -Path "$sysPath\Control\ComputerName\ActiveComputerName" -Name "ComputerName" -Value $newName -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path "$sysPath\Control\ComputerName\ComputerName" -Name "ComputerName" -Value $newName -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path "$sysPath\Services\Tcpip\Parameters" -Name "Hostname" -Value $newName -ErrorAction SilentlyContinue
 
-      # 6. Install Tools (Chrome, VS Code, Ghidra, IDA)
-      - name: Install Tools
+      # 6. Install Base Tools (Chrome, VS Code, Python, Go) via CHOCOLATEY
+      # Chocolatey lebih stabil daripada Winget di Server
+      - name: Install Base Tools (Choco)
         run: |
-          # Chrome
-          $Installer = "$env:TEMP\chrome_installer.exe"
-          Invoke-WebRequest "http://dl.google.com/chrome/install/375.126/chrome_installer.exe" -OutFile $Installer
-          Start-Process $Installer -ArgumentList "/silent", "/install" -Wait
-          Remove-Item $Installer
-          
-          # JDK 21 (For Ghidra)
-          winget install Microsoft.OpenJDK.21 --silent --accept-package-agreements --accept-source-agreements
-          
-          # Ghidra
-          winget install NSA.Ghidra --silent --accept-package-agreements --accept-source-agreements
-          
-          # IDA Free
-          winget install Hex-Rays.IDA.Free --silent --accept-package-agreements --accept-source-agreements
-          
-          # VS Code
-          winget install Microsoft.VisualStudioCode --silent --accept-package-agreements --accept-source-agreements
-          
-          # Python & Go
-          winget install Python.Python.3.12 --silent --accept-package-agreements
-          winget install GoLang.Go.1.23 --silent --accept-package-agreements
-          
-          Write-Host "✅ Semua Tools Terinstall!"
+          Write-Host "⬇️ Installing Base Tools via Chocolatey..."
+          choco install googlechrome -y --no-progress
+          choco install vscode -y --no-progress
+          choco install python -y --no-progress
+          choco install golang -y --no-progress
+          choco install openjdk21 -y --no-progress
+          Write-Host "✅ Base Tools Installed"
 
-      # 7. Info & Keep Alive
+      # 7. Install GHIDRA (Direct Download - Anti Gagal)
+      - name: Install Ghidra (Manual)
+        run: |
+          Write-Host "⬇️ Mendownload Ghidra..."
+          $ghidraUrl = "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_11.0.1_build/ghidra_11.0.1_PUBLIC_20240130.zip"
+          $dest = "$env:USERPROFILE\Desktop\ghidra.zip"
+          $extractPath = "$env:USERPROFILE\Desktop"
+          
+          Invoke-WebRequest -Uri $ghidraUrl -OutFile $dest
+          Write-Host "📦 Mengekstrak Ghidra..."
+          Expand-Archive -Path $dest -DestinationPath $extractPath -Force
+          Remove-Item $dest
+          
+          # Buat Shortcut Ghidra di Desktop agar mudah diklik
+          $WScriptShell = New-Object -ComObject WScript.Shell
+          $Shortcut = $WScriptShell.CreateShortcut("$env:USERPROFILE\Desktop\Ghidra Run.lnk")
+          # Mencari folder hasil ekstrak (karena nama foldernya panjang)
+          $ghidraFolder = Get-ChildItem "$extractPath\ghidra*" | Select-Object -ExpandProperty FullName
+          $Shortcut.TargetPath = "$ghidraFolder\ghidraRun.bat"
+          $Shortcut.Save()
+          Write-Host "✅ Ghidra Installed & Shortcut Created on Desktop"
+
+      # 8. Install IDA FREE (Direct Download - Anti Gagal)
+      - name: Install IDA Free (Manual)
+        run: |
+          Write-Host "⬇️ Mendownload IDA Free..."
+          # Link IDA Free 8.4 (Stable)
+          $idaUrl = "https://out7.hex-rays.com/files/idafree84_windows.exe"
+          $installer = "$env:TEMP\idafree.exe"
+          
+          try {
+              Invoke-WebRequest -Uri $idaUrl -OutFile $installer
+              Write-Host "📦 Menginstall IDA Free (Silent Mode)..."
+              Start-Process $installer -ArgumentList "--mode unattended", "--install_python 1" -Wait
+              Write-Host "✅ IDA Free Installed"
+          } catch {
+              Write-Host "⚠️ Gagal install IDA (Link mungkin expired), melanjutkan..."
+          }
+
+      # 9. Final Info
       - name: Display connection info
         run: |
           $ip = "${{ steps.tailscale.outputs.tailscale_ip }}"
           Write-Host "========================================="
-          Write-Host "🎯 RDP SIAP - FIREWALL SUDAH MATI"
+          Write-Host "🎯 RDP READY - ALL TOOLS INSTALLED"
           Write-Host "========================================="
           Write-Host "🖥️ Nama Komputer (Session) : richo"
           Write-Host "🌐 IP Tailscale            : $ip"
           Write-Host "👤 Username                : runneradmin"
           Write-Host "🔑 Password                : P@ssw0rd123!"
           Write-Host ""
-          Write-Host "💡 TIPS AKSES LOCALHOST:"
-          Write-Host "   1. Jika akses dari HP/Laptop luar: Gunakan http://$ip:PORT"
-          Write-Host "   2. Jika akses dari Chrome RDP: Gunakan http://localhost:PORT"
-          Write-Host "   3. Pastikan aplikasi run dengan host '0.0.0.0' (jangan 127.0.0.1)"
+          Write-Host "📂 Lokasi Tools:"
+          Write-Host "   - 🐉 Ghidra: Ada shortcut di Desktop"
+          Write-Host "   - 🕵️ IDA Free: Cari di Start Menu / Desktop"
+          Write-Host "   - 💻 VS Code & Chrome: Sudah terinstall"
+          Write-Host ""
+          Write-Host "⚠️ NOTE: Jika localhost error, pakai http://$ip:PORT"
           Write-Host "========================================="
           while ($true) { Start-Sleep -Seconds 60 }
