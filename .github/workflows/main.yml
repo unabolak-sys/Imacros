@@ -1,4 +1,4 @@
-name: RDP Ultimate (Manual Install IDA+Ghidra)
+name: RDP Simpel (.NET Only)
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 1. Install Tailscale
+      # 1. Install Tailscale (Wajib)
       - name: Install Tailscale
         run: |
           Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "$env:TEMP\tailscale-setup.exe"
@@ -31,102 +31,53 @@ jobs:
           echo "tailscale_ip=$ip" >> $env:GITHUB_OUTPUT
         id: tailscale
 
-      # 3. Enable RDP & MATIKAN FIREWALL
-      - name: Enable RDP & Disable Firewall
+      # 3. Setup System (RDP + Firewall + Password + Name)
+      - name: Setup System (Fast Mode)
         run: |
-          # Enable RDP
+          Write-Host "🚀 Mengkonfigurasi Sistem..."
+          
+          # A. Enable RDP
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
           
-          # 🔥 FIX: Matikan Firewall Total
-          Write-Host "🔥 Mematikan Windows Firewall..."
+          # B. Matikan Firewall (Supaya gak ribet koneksi)
           Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
-          Write-Host "✅ RDP enabled & Firewall OFF"
-
-      # 4. Set Password
-      - name: Set user password
-        run: |
+          
+          # C. Set Password
           $password = ConvertTo-SecureString -String "P@ssw0rd123!" -AsPlainText -Force
           Set-LocalUser -Name "runneradmin" -Password $password
-
-      # 5. Change Name to richo
-      - name: Change computer name to richo
-        run: |
+          
+          # D. Ubah Nama ke richo
           $newName = "richo"
           $env:COMPUTERNAME = $newName
           [Environment]::SetEnvironmentVariable("COMPUTERNAME", $newName, "User")
-          [Environment]::SetEnvironmentVariable("COMPUTERNAME", $newName, "Machine")
           $sysPath = "HKLM:\SYSTEM\CurrentControlSet"
           Set-ItemProperty -Path "$sysPath\Control\ComputerName\ActiveComputerName" -Name "ComputerName" -Value $newName -ErrorAction SilentlyContinue
-
-      # 6. Install Base Tools (Chrome, VS Code, Python, Go) via CHOCOLATEY
-      # Chocolatey lebih stabil daripada Winget di Server
-      - name: Install Base Tools (Choco)
-        run: |
-          Write-Host "⬇️ Installing Base Tools via Chocolatey..."
-          choco install googlechrome -y --no-progress
-          choco install vscode -y --no-progress
-          choco install python -y --no-progress
-          choco install golang -y --no-progress
-          choco install openjdk21 -y --no-progress
-          Write-Host "✅ Base Tools Installed"
-
-      # 7. Install GHIDRA (Direct Download - Anti Gagal)
-      - name: Install Ghidra (Manual)
-        run: |
-          Write-Host "⬇️ Mendownload Ghidra..."
-          $ghidraUrl = "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_11.0.1_build/ghidra_11.0.1_PUBLIC_20240130.zip"
-          $dest = "$env:USERPROFILE\Desktop\ghidra.zip"
-          $extractPath = "$env:USERPROFILE\Desktop"
           
-          Invoke-WebRequest -Uri $ghidraUrl -OutFile $dest
-          Write-Host "📦 Mengekstrak Ghidra..."
-          Expand-Archive -Path $dest -DestinationPath $extractPath -Force
-          Remove-Item $dest
-          
-          # Buat Shortcut Ghidra di Desktop agar mudah diklik
-          $WScriptShell = New-Object -ComObject WScript.Shell
-          $Shortcut = $WScriptShell.CreateShortcut("$env:USERPROFILE\Desktop\Ghidra Run.lnk")
-          # Mencari folder hasil ekstrak (karena nama foldernya panjang)
-          $ghidraFolder = Get-ChildItem "$extractPath\ghidra*" | Select-Object -ExpandProperty FullName
-          $Shortcut.TargetPath = "$ghidraFolder\ghidraRun.bat"
-          $Shortcut.Save()
-          Write-Host "✅ Ghidra Installed & Shortcut Created on Desktop"
+          Write-Host "✅ System Configured (RDP ON, Firewall OFF, Name: richo)"
 
-      # 8. Install IDA FREE (Direct Download - Anti Gagal)
-      - name: Install IDA Free (Manual)
+      # 4. Install .NET SDK (Satu-satunya request)
+      - name: Install .NET SDK 8
         run: |
-          Write-Host "⬇️ Mendownload IDA Free..."
-          # Link IDA Free 8.4 (Stable)
-          $idaUrl = "https://out7.hex-rays.com/files/idafree84_windows.exe"
-          $installer = "$env:TEMP\idafree.exe"
+          Write-Host "⬇️ Installing .NET SDK 8..."
+          # Windows Runner biasanya sudah ada .NET, tapi kita pastikan install/update
+          winget install Microsoft.DotNet.SDK.8 --silent --accept-package-agreements
           
-          try {
-              Invoke-WebRequest -Uri $idaUrl -OutFile $installer
-              Write-Host "📦 Menginstall IDA Free (Silent Mode)..."
-              Start-Process $installer -ArgumentList "--mode unattended", "--install_python 1" -Wait
-              Write-Host "✅ IDA Free Installed"
-          } catch {
-              Write-Host "⚠️ Gagal install IDA (Link mungkin expired), melanjutkan..."
-          }
+          Write-Host "✅ .NET Installed. Version check:"
+          dotnet --version
 
-      # 9. Final Info
-      - name: Display connection info
+      # 5. Ready & Keep Alive
+      - name: RDP Ready
         run: |
           $ip = "${{ steps.tailscale.outputs.tailscale_ip }}"
           Write-Host "========================================="
-          Write-Host "🎯 RDP READY - ALL TOOLS INSTALLED"
+          Write-Host "🚀 RDP SIAP (MODE RINGAN)"
           Write-Host "========================================="
-          Write-Host "🖥️ Nama Komputer (Session) : richo"
-          Write-Host "🌐 IP Tailscale            : $ip"
-          Write-Host "👤 Username                : runneradmin"
-          Write-Host "🔑 Password                : P@ssw0rd123!"
+          Write-Host "🖥️ Nama Komputer : richo"
+          Write-Host "🌐 IP Tailscale  : $ip"
+          Write-Host "👤 Username      : runneradmin"
+          Write-Host "🔑 Password      : P@ssw0rd123!"
           Write-Host ""
-          Write-Host "📂 Lokasi Tools:"
-          Write-Host "   - 🐉 Ghidra: Ada shortcut di Desktop"
-          Write-Host "   - 🕵️ IDA Free: Cari di Start Menu / Desktop"
-          Write-Host "   - 💻 VS Code & Chrome: Sudah terinstall"
-          Write-Host ""
-          Write-Host "⚠️ NOTE: Jika localhost error, pakai http://$ip:PORT"
+          Write-Host "📦 Tools: Hanya .NET SDK"
           Write-Host "========================================="
           while ($true) { Start-Sleep -Seconds 60 }
