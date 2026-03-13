@@ -1,4 +1,4 @@
-name: RDP Simpel (.NET Only)
+name: RDP Simpel (.NET & Node.js)
 
 on:
   workflow_dispatch:
@@ -54,8 +54,13 @@ jobs:
           
           Write-Host "✅ System Configured (Name: richo)"
 
-           
-      # 4. Ganti Install .NET dengan Shortcut Virtual Keyboard
+      # 4. Install Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Anda bisa mengubah angka ini jika butuh versi lain (misal: '18' atau '22')
+
+      # 5. Ganti Install .NET dengan Shortcut Virtual Keyboard
       - name: Setup Virtual Keyboard Shortcut
         run: |
           Write-Host "⌨️ Creating Virtual Keyboard Shortcut..."
@@ -71,7 +76,7 @@ jobs:
           Copy-Item $ShortcutLocation -Destination "C:\Users\Public\Desktop\Virtual Keyboard.lnk" -Force
           Write-Host "✅ Virtual Keyboard ready on Desktop"
 
-      # 5. Ready & Keep Alive
+      # 6. Ready & Keep Alive
       - name: RDP Ready
         run: |
           $ip = "${{ steps.tailscale.outputs.tailscale_ip }}"
@@ -83,6 +88,7 @@ jobs:
           Write-Host "👤 Username      : runneradmin"
           Write-Host "🔑 Password      : P@ssw0rd123!"
           Write-Host ""
+          Write-Host "⚙️ Feature: Node.js Installed"
           Write-Host "⌨️ Feature: Virtual Keyboard Shortcut Created"
           Write-Host "========================================="
           while ($true) { Start-Sleep -Seconds 60 }
