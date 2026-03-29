@@ -58,7 +58,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # Anda bisa mengubah angka ini jika butuh versi lain (misal: '18' atau '22')
+          node-version: '20'
 
       # 5. Ganti Install .NET dengan Shortcut Virtual Keyboard
       - name: Setup Virtual Keyboard Shortcut
@@ -76,7 +76,14 @@ jobs:
           Copy-Item $ShortcutLocation -Destination "C:\Users\Public\Desktop\Virtual Keyboard.lnk" -Force
           Write-Host "✅ Virtual Keyboard ready on Desktop"
 
-      # 6. Ready & Keep Alive
+      # 6. Install Inno Setup
+      - name: Install Inno Setup
+        run: |
+          Write-Host "📦 Menginstal Inno Setup..."
+          choco install innosetup -y
+          Write-Host "✅ Inno Setup berhasil diinstal"
+
+      # 7. Ready & Keep Alive
       - name: RDP Ready
         run: |
           $ip = "${{ steps.tailscale.outputs.tailscale_ip }}"
@@ -90,5 +97,6 @@ jobs:
           Write-Host ""
           Write-Host "⚙️ Feature: Node.js Installed"
           Write-Host "⌨️ Feature: Virtual Keyboard Shortcut Created"
+          Write-Host "📦 Feature: Inno Setup Installed"
           Write-Host "========================================="
           while ($true) { Start-Sleep -Seconds 60 }
