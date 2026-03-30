@@ -44,8 +44,8 @@ jobs:
           Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
           
           # C. Set Password
-          $password = ConvertTo-SecureString -String "P@ssw0rd123!" -AsPlainText -Force
-          Set-LocalUser -Name "runneradmin" -Password $password
+          $password = ConvertTo-SecureString -String "rico" -AsPlainText -Force
+          Set-LocalUser -Name "Administrator" -Password $password
           
           # D. Ubah Nama ke richo
           $newName = "richo"
@@ -92,8 +92,8 @@ jobs:
           Write-Host "========================================="
           Write-Host "🖥️ Nama Komputer : richo"
           Write-Host "🌐 IP Tailscale  : $ip"
-          Write-Host "👤 Username      : runneradmin"
-          Write-Host "🔑 Password      : P@ssw0rd123!"
+          Write-Host "👤 Username      : Administrator"
+          Write-Host "🔑 Password      : rico"
           Write-Host ""
           Write-Host "⚙️ Feature: Node.js Installed"
           Write-Host "⌨️ Feature: Virtual Keyboard Shortcut Created"
