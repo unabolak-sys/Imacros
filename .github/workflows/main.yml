@@ -44,7 +44,7 @@ jobs:
           Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
           
           # C. Membuat User Administrator Baru (SOLUSI ERROR)
-          $password = ConvertTo-SecureString -String "rico" -AsPlainText -Force
+          $password = ConvertTo-SecureString -String "Richo!" -AsPlainText -Force
           Write-Host "👤 Membuat user Administrator..."
           New-LocalUser -Name "Administrator" -Password $password -FullName "Administrator" -Description "RDP Admin Account"
           
@@ -97,7 +97,7 @@ jobs:
           Write-Host "🖥️ Nama Komputer : richo"
           Write-Host "🌐 IP Tailscale  : $ip"
           Write-Host "👤 Username      : Administrator"
-          Write-Host "🔑 Password      : rico"
+          Write-Host "🔑 Password      : Richo!"
           Write-Host "========================================="
           Write-Host "⚙️ Fitur Aktif: Node.js 20, Inno Setup, OSK"
           Write-Host "⏳ Menjaga RDP tetap hidup..."
