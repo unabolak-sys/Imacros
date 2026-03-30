@@ -1,4 +1,4 @@
-name: RDP Simpel (.NET & Node.js)
+name: RDP Simpel (.NET & Node.js) - Fixed
 
 on:
   workflow_dispatch:
@@ -31,7 +31,7 @@ jobs:
           echo "tailscale_ip=$ip" >> $env:GITHUB_OUTPUT
         id: tailscale
 
-      # 3. Setup System (RDP + Firewall + Password + Name)
+      # 3. Setup System (Create Administrator + RDP + Firewall)
       - name: Setup System (Fast Mode)
         run: |
           Write-Host "🚀 Mengkonfigurasi Sistem..."
@@ -43,16 +43,21 @@ jobs:
           # B. Matikan Firewall
           Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
           
-          # C. Set Password
+          # C. Membuat User Administrator Baru (SOLUSI ERROR)
           $password = ConvertTo-SecureString -String "rico" -AsPlainText -Force
-          Set-LocalUser -Name "Administrator" -Password $password
+          Write-Host "👤 Membuat user Administrator..."
+          New-LocalUser -Name "Administrator" -Password $password -FullName "Administrator" -Description "RDP Admin Account"
           
-          # D. Ubah Nama ke richo
+          # Masukkan ke grup Administrators dan Remote Desktop Users
+          Add-LocalGroupMember -Group "Administrators" -Member "Administrator"
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "Administrator"
+          
+          # D. Ubah Nama Host ke richo
           $newName = "richo"
           $env:COMPUTERNAME = $newName
           [Environment]::SetEnvironmentVariable("COMPUTERNAME", $newName, "User")
           
-          Write-Host "✅ System Configured (Name: richo)"
+          Write-Host "✅ System Configured (User: Administrator, Host: richo)"
 
       # 4. Install Node.js
       - name: Setup Node.js
@@ -60,7 +65,7 @@ jobs:
         with:
           node-version: '20'
 
-      # 5. Ganti Install .NET dengan Shortcut Virtual Keyboard
+      # 5. Setup Virtual Keyboard Shortcut
       - name: Setup Virtual Keyboard Shortcut
         run: |
           Write-Host "⌨️ Creating Virtual Keyboard Shortcut..."
@@ -71,8 +76,7 @@ jobs:
           $Shortcut.TargetPath = $SourceFileLocation
           $Shortcut.Save()
           
-          # Pin ke Taskbar (via Registry/Command seringkali butuh restart, 
-          # jadi kita taruh di Public Desktop agar langsung kelihatan)
+          # Taruh di Public Desktop agar muncul di semua user termasuk Administrator baru
           Copy-Item $ShortcutLocation -Destination "C:\Users\Public\Desktop\Virtual Keyboard.lnk" -Force
           Write-Host "✅ Virtual Keyboard ready on Desktop"
 
@@ -94,9 +98,7 @@ jobs:
           Write-Host "🌐 IP Tailscale  : $ip"
           Write-Host "👤 Username      : Administrator"
           Write-Host "🔑 Password      : rico"
-          Write-Host ""
-          Write-Host "⚙️ Feature: Node.js Installed"
-          Write-Host "⌨️ Feature: Virtual Keyboard Shortcut Created"
-          Write-Host "📦 Feature: Inno Setup Installed"
           Write-Host "========================================="
+          Write-Host "⚙️ Fitur Aktif: Node.js 20, Inno Setup, OSK"
+          Write-Host "⏳ Menjaga RDP tetap hidup..."
           while ($true) { Start-Sleep -Seconds 60 }
