@@ -43,7 +43,7 @@ jobs:
           # B. Matikan Firewall
           Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
           
-          # C. Membuat User Administrator Baru (SOLUSI ERROR)
+          # C. Membuat User Administrator Baru
           $password = ConvertTo-SecureString -String "Richo!" -AsPlainText -Force
           Write-Host "👤 Membuat user Administrator..."
           New-LocalUser -Name "Administrator" -Password $password -FullName "Administrator" -Description "RDP Admin Account"
@@ -54,8 +54,7 @@ jobs:
           
           # D. Ubah Nama Host ke richo
           $newName = "richo"
-          $env:COMPUTERNAME = $newName
-          [Environment]::SetEnvironmentVariable("COMPUTERNAME", $newName, "User")
+          Rename-Computer -NewName $newName -Force -ErrorAction SilentlyContinue
           
           Write-Host "✅ System Configured (User: Administrator, Host: richo)"
 
@@ -65,7 +64,14 @@ jobs:
         with:
           node-version: '20'
 
-      # 5. Setup Virtual Keyboard Shortcut
+      # 5. Install ASAR (Request User)
+      - name: Install asar
+        run: |
+          Write-Host "📦 Menginstal asar utility..."
+          npm install -g asar
+          Write-Host "✅ asar berhasil diinstal secara global"
+
+      # 6. Setup Virtual Keyboard Shortcut
       - name: Setup Virtual Keyboard Shortcut
         run: |
           Write-Host "⌨️ Creating Virtual Keyboard Shortcut..."
@@ -76,18 +82,18 @@ jobs:
           $Shortcut.TargetPath = $SourceFileLocation
           $Shortcut.Save()
           
-          # Taruh di Public Desktop agar muncul di semua user termasuk Administrator baru
+          # Taruh di Public Desktop agar muncul di semua user
           Copy-Item $ShortcutLocation -Destination "C:\Users\Public\Desktop\Virtual Keyboard.lnk" -Force
           Write-Host "✅ Virtual Keyboard ready on Desktop"
 
-      # 6. Install Inno Setup
+      # 7. Install Inno Setup
       - name: Install Inno Setup
         run: |
           Write-Host "📦 Menginstal Inno Setup..."
           choco install innosetup -y
           Write-Host "✅ Inno Setup berhasil diinstal"
 
-      # 7. Ready & Keep Alive
+      # 8. Ready & Keep Alive
       - name: RDP Ready
         run: |
           $ip = "${{ steps.tailscale.outputs.tailscale_ip }}"
@@ -99,6 +105,6 @@ jobs:
           Write-Host "👤 Username      : Administrator"
           Write-Host "🔑 Password      : Richo!"
           Write-Host "========================================="
-          Write-Host "⚙️ Fitur Aktif: Node.js 20, Inno Setup, OSK"
+          Write-Host "⚙️ Fitur Aktif: Node.js 20, asar, Inno Setup, OSK"
           Write-Host "⏳ Menjaga RDP tetap hidup..."
           while ($true) { Start-Sleep -Seconds 60 }
